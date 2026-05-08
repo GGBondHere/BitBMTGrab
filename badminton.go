@@ -5,6 +5,7 @@ import (
 	"badminton/models"
 	"fmt"
 	"sort"
+	"strings"
 	"time"
 )
 
@@ -190,8 +191,20 @@ func main() {
 
 	scene := fmt.Sprintf("[{\"day\":\"%s\",\"fields\":{\"%s\":[%d]}}]", dateStr, venueFieldID, hourID)
 
-	check, err := api.CheckSportSchedule(venueID, scene, headers)
-	if err != nil {
+	var check *models.CheckOrderResponse
+	for {
+		check, err = api.CheckSportSchedule(venueID, scene, headers)
+		if err == nil {
+			fmt.Println("\n检查通过，准备进入下单流程...")
+			break
+		}
+
+		if strings.Contains(err.Error(), "预约中") {
+			fmt.Printf("检查订单失败: %v，5秒后继续检查...\n", err)
+			time.Sleep(5 * time.Second)
+			continue
+		}
+
 		fmt.Printf("检查订单失败: %v\n", err)
 		return
 	}
