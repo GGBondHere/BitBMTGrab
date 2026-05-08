@@ -4,7 +4,7 @@ import "fmt"
 
 // String 为Response实现String方法
 func (r Response[T]) String() string {
-	return fmt.Sprintf("Code: %s\nMessage: %s\nTime: %s\nData: %v", r.Code, r.Message, r.TimeString, r.Data)
+	return fmt.Sprintf("Code: %d\nMessage: %s\nTime: %s\nData: %v", r.Code, r.Message, r.TimeString, r.Data)
 }
 
 // String 为SportEventsHour实现String方法
