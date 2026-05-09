@@ -4,6 +4,7 @@ import (
 	"badminton/api"
 	"badminton/models"
 	"fmt"
+	"os"
 	"sort"
 	"strings"
 	"time"
@@ -125,6 +126,15 @@ func waitUntilNextAvailableTime() {
 }
 
 func main() {
+	if len(os.Args) > 1 && os.Args[1] == "--testdingtalk" {
+		if err := sendDingTalkTestNotice(); err != nil {
+			fmt.Printf("钉钉通知测试失败: %v\n", err)
+			return
+		}
+		fmt.Println("钉钉通知测试发送成功")
+		return
+	}
+
 	headers := map[string]string{
 		"Content-Type": "application/x-www-form-urlencoded; charset=UTF-8",
 	}
@@ -216,6 +226,10 @@ func main() {
 
 		for _, order := range orderList.Data.List {
 			if order.SportEventsID == venueID {
+				err = sendOrderNotice(venueID, venueName, dateStr, hour, order.ID, order.Amount)
+				if err != nil {
+					fmt.Printf("钉钉通知失败: %v\n", err)
+				}
 				fmt.Printf("已检测到订单 %d，正在等待支付...\n", order.ID)
 				return
 			}
@@ -239,6 +253,10 @@ func main() {
 
 			for _, order := range orderList.Data.List {
 				if order.SportEventsID == venueID {
+					err = sendOrderNotice(venueID, venueName, dateStr, hour, order.ID, order.Amount)
+					if err != nil {
+						fmt.Printf("钉钉通知失败: %v\n", err)
+					}
 					fmt.Printf("已检测到订单 %d，正在等待支付...\n", order.ID)
 					return
 				}
