@@ -191,28 +191,23 @@ func main() {
 
 	scene := fmt.Sprintf("[{\"day\":\"%s\",\"fields\":{\"%s\":[%d]}}]", dateStr, venueFieldID, hourID)
 
-	var check *models.CheckOrderResponse
 	for {
-		check, err = api.CheckSportSchedule(venueID, scene, headers)
-		if err == nil {
-			fmt.Println("\n检查通过，准备进入下单流程...")
-			break
+		check, err := api.CheckSportSchedule(venueID, scene, headers)
+		if err != nil {
+			if strings.Contains(err.Error(), "预约中") {
+				fmt.Printf("检查订单失败: %v，5秒后继续检查...\n", err)
+				time.Sleep(5 * time.Second)
+				continue
+			}
+
+			fmt.Printf("检查订单失败: %v\n", err)
+			return
 		}
 
-		if strings.Contains(err.Error(), "预约中") {
-			fmt.Printf("检查订单失败: %v，5秒后继续检查...\n", err)
-			time.Sleep(5 * time.Second)
-			continue
-		}
+		fmt.Println("\n检查通过，准备进入下单流程...")
+		fmt.Println("\n等待可下单时间...")
+		waitUntilNextAvailableTime()
 
-		fmt.Printf("检查订单失败: %v\n", err)
-		return
-	}
-
-	fmt.Println("\n等待可下单时间...")
-	waitUntilNextAvailableTime()
-
-	for {
 		orderList, err := api.GetOrderList("makeappointment", "created", "", 1, 20, headers)
 		if err != nil {
 			fmt.Printf("获取订单列表失败: %v\n", err)
@@ -228,9 +223,30 @@ func main() {
 
 		_, err = api.SubmitOrder(venueID, check.Data.TotalAmount, scene, headers)
 		if err != nil {
-			fmt.Printf("提交订单失败: %v\n", err)
+			fmt.Printf("提交订单失败: %v，5秒后回到检查阶段...\n", err)
+			time.Sleep(5 * time.Second)
+			continue
 		}
-		time.Sleep(5 * time.Second)
+
+		fmt.Println("订单提交成功，开始确认订单...")
+		for {
+			orderList, err := api.GetOrderList("makeappointment", "created", "", 1, 20, headers)
+			if err != nil {
+				fmt.Printf("获取订单列表失败: %v，5秒后继续确认...\n", err)
+				time.Sleep(5 * time.Second)
+				continue
+			}
+
+			for _, order := range orderList.Data.List {
+				if order.SportEventsID == venueID {
+					fmt.Printf("已检测到订单 %d，正在等待支付...\n", order.ID)
+					return
+				}
+			}
+
+			fmt.Println("暂未检测到未支付订单，5秒后继续确认...")
+			time.Sleep(5 * time.Second)
+		}
 	}
 
 }
