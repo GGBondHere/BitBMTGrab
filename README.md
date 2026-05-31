@@ -30,6 +30,7 @@
 - 抓包工具，例如 Reqable
 - 微信，登录你自己的账号
 - 钉钉自定义机器人，可选，用于抢到后通知，防止抢到后错过 15 分钟支付有效期
+- Windows 弹窗通知，可选，适合电脑前使用
 
 ## 抓取 token 与 openid
 
@@ -131,7 +132,43 @@ const DingTalkWebhook = ""
 go run . --testdingtalk
 ```
 
+如果已经编译过，也可以直接用编译后的文件测试：
+
+```powershell
+.\badminton.exe --testdingtalk
+```
+
 如果配置正确，钉钉群会收到一条测试消息。默认通知标题包含“抢票通知”，用于匹配钉钉机器人关键词策略。
+
+## 配置 Windows 弹窗通知（可选）
+
+如果你在 Windows 或 WSL2 Debian 中运行程序，可以启用 Windows 弹窗通知。它不是右下角 toast 通知，而是普通弹窗，抢到后需要你手动关闭。
+
+打开 [config/config.go](config/config.go)，把：
+
+```go
+const EnableWindowsNotification = false
+```
+
+改成：
+
+```go
+const EnableWindowsNotification = true
+```
+
+测试 Windows 弹窗：
+
+```powershell
+go run . --testwin
+```
+
+如果已经编译过，也可以直接用编译后的文件测试：
+
+```powershell
+.\badminton.exe --testwin
+```
+
+WSL2 Debian 下也会尝试调用 Windows 的 `powershell.exe` 来显示弹窗。如果提示找不到 `powershell.exe`，请检查 WSL 是否启用了 Windows interop。Linux/macOS 不支持这种 Windows 弹窗通知，但仍可以使用钉钉通知。
 
 ## 运行程序
 
@@ -141,13 +178,15 @@ go run . --testdingtalk
 go run .
 ```
 
-编译后运行。
+编译后运行：
 
 Windows：
 
 ```powershell
 go build -o badminton.exe .
 .\badminton.exe
+.\badminton.exe --testdingtalk
+.\badminton.exe --testwin
 ```
 
 WSL2 Debian / Linux / macOS：
@@ -155,9 +194,11 @@ WSL2 Debian / Linux / macOS：
 ```bash
 go build -o badminton .
 ./badminton
+./badminton --testdingtalk
+./badminton --testwin
 ```
 
-输出文件名可以自己改，Windows 通常使用 `.exe` 后缀，Linux/macOS/WSL 通常不需要后缀。
+输出文件名可以自己改，Windows 通常使用 `.exe` 后缀，Linux/macOS/WSL 通常不需要后缀。编译后的文件也支持测试参数；如果过几天发现通知异常，可以先用编译后的文件带参数重新测试，不必重新 `go run`。
 
 ## 输入预约参数
 
@@ -225,7 +266,7 @@ go build -o badminton .
 已检测到订单 123，正在等待支付...
 ```
 
-程序检测到未支付订单，说明已经抢到待支付订单，此时如果配置了钉钉 Webhook，会发送钉钉通知。
+程序检测到未支付订单，说明已经抢到待支付订单，此时如果配置了钉钉 Webhook，会发送钉钉通知，如果启用了 Windows 弹窗通知，还会弹出一个 Windows 消息框提醒你前往支付。
 
 建议每次使用时先观察一轮检查输出，因为程序目前只对“预约中”状态持续等待；如果接口返回的是其他状态，例如：
 
@@ -269,9 +310,27 @@ go version
 
 ```powershell
 go run . --testdingtalk
+.\badminton.exe --testdingtalk
 ```
 
 如果仍然失败，根据控制台打印的钉钉错误信息继续排查，也可以把错误信息发给 AI 辅助分析。
+
+### Windows 弹窗通知不触发
+
+检查：
+
+- `EnableWindowsNotification` 是否设置为 `true`。
+- 当前环境是否是 Windows 或 WSL2。
+- WSL2 中是否可以直接执行 `powershell.exe`。
+
+可以先运行：
+
+```powershell
+go run . --testwin
+.\badminton.exe --testwin
+```
+
+如果仍然失败，根据控制台打印的 Windows 通知错误继续排查。
 
 ### 程序一直没有抢到
 

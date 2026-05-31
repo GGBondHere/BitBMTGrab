@@ -134,6 +134,14 @@ func main() {
 		fmt.Println("钉钉通知测试发送成功")
 		return
 	}
+	if len(os.Args) > 1 && os.Args[1] == "--testwin" {
+		if err := showWindowsTestNotice(); err != nil {
+			fmt.Printf("Windows 通知测试失败: %v\n", err)
+			return
+		}
+		fmt.Println("Windows 通知测试显示成功")
+		return
+	}
 
 	headers := map[string]string{
 		"Content-Type": "application/x-www-form-urlencoded; charset=UTF-8",
@@ -230,6 +238,10 @@ func main() {
 				if err != nil {
 					fmt.Printf("钉钉通知失败: %v\n", err)
 				}
+				err = showWindowsOrderNotice(venueID, venueName, dateStr, hour, order.ID, order.Amount)
+				if err != nil {
+					fmt.Printf("Windows 通知失败: %v\n", err)
+				}
 				fmt.Printf("已检测到订单 %d，正在等待支付...\n", order.ID)
 				return
 			}
@@ -256,6 +268,10 @@ func main() {
 					err = sendOrderNotice(venueID, venueName, dateStr, hour, order.ID, order.Amount)
 					if err != nil {
 						fmt.Printf("钉钉通知失败: %v\n", err)
+					}
+					err = showWindowsOrderNotice(venueID, venueName, dateStr, hour, order.ID, order.Amount)
+					if err != nil {
+						fmt.Printf("Windows 通知失败: %v\n", err)
 					}
 					fmt.Printf("已检测到订单 %d，正在等待支付...\n", order.ID)
 					return
