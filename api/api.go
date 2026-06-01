@@ -5,7 +5,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
-	"io/ioutil"
 	"net/http"
 	"strings"
 	"time"
@@ -38,7 +37,7 @@ func makeRequest(url string, headers map[string]string) ([]byte, error) {
 		}
 	}(res.Body)
 
-	body, err := ioutil.ReadAll(res.Body)
+	body, err := io.ReadAll(res.Body)
 	if err != nil {
 		return nil, fmt.Errorf("读取响应失败: %w", err)
 	}
@@ -214,7 +213,7 @@ func makePostRequest(url string, data map[string]string, headers map[string]stri
 	}
 	defer res.Body.Close()
 
-	body, err := ioutil.ReadAll(res.Body)
+	body, err := io.ReadAll(res.Body)
 	if err != nil {
 		return nil, fmt.Errorf("读取响应失败: %w", err)
 	}
@@ -224,7 +223,6 @@ func makePostRequest(url string, data map[string]string, headers map[string]stri
 
 // CheckSportSchedule 检查订单是否可以下单
 func CheckSportSchedule(id int, scene string, headers map[string]string) (*models.CheckOrderResponse, error) {
-	fmt.Printf("正在检查场馆ID %d 的订单信息...\n", id)
 	url := fmt.Sprintf("/api/sport_schedule/check/id/%d", id)
 
 	data := map[string]string{
