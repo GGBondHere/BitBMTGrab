@@ -2,6 +2,7 @@ package main
 
 import (
 	"badminton/api"
+	"badminton/config"
 	"badminton/models"
 	"fmt"
 	"os"
@@ -80,6 +81,37 @@ func getWeekday(dateStr string) (int, error) {
 		weekday = 7
 	}
 	return weekday, nil
+}
+
+func normalizeBookingDate(input string, defaultYear int) (string, error) {
+	if input == "" {
+		return "", fmt.Errorf("日期不能为空")
+	}
+
+	if strings.Contains(input, "-") {
+		date, err := time.Parse("2006-01-02", input)
+		if err != nil {
+			return "", fmt.Errorf("日期格式错误: %v", err)
+		}
+		return date.Format("2006-01-02"), nil
+	}
+
+	dateInput := input
+	if defaultYear > 0 && len(input) == 4 {
+		dateInput = fmt.Sprintf("%04d%s", defaultYear, input)
+	}
+	if len(dateInput) != 8 {
+		if defaultYear > 0 {
+			return "", fmt.Errorf("请按 MMDD 或 YYYYMMDD 输入日期")
+		}
+		return "", fmt.Errorf("请按 YYYYMMDD 输入日期")
+	}
+
+	date, err := time.Parse("20060102", dateInput)
+	if err != nil {
+		return "", fmt.Errorf("日期格式错误: %v", err)
+	}
+	return date.Format("2006-01-02"), nil
 }
 
 // findVenueIDByName 根据完整名称或名称末尾的编号查找场地ID
@@ -345,9 +377,13 @@ func main() {
 		"Content-Type": "application/x-www-form-urlencoded; charset=UTF-8",
 	}
 
-	fmt.Print("请输入场馆ID（25-良乡，51-中关村，54-中关村早晚场）: ")
-	var venueID int
-	fmt.Scanln(&venueID)
+	venueID := config.DefaultVenueID
+	if venueID > 0 {
+		fmt.Printf("使用配置场馆ID: %d\n", venueID)
+	} else {
+		fmt.Print("请输入场馆ID（25-良乡，51-中关村，54-中关村早晚场）: ")
+		fmt.Scanln(&venueID)
+	}
 
 	venues, err := api.GetSportEventsField(venueID, headers)
 	if err != nil {
@@ -361,9 +397,18 @@ func main() {
 		return
 	}
 
-	fmt.Print("请输入预订日期（格式：YYYY-MM-DD）: ")
-	var dateStr string
-	fmt.Scanln(&dateStr)
+	if config.DefaultYear > 0 {
+		fmt.Printf("请输入预订日期（格式：MMDD，年份使用配置 %d）: ", config.DefaultYear)
+	} else {
+		fmt.Print("请输入预订日期（格式：YYYYMMDD）: ")
+	}
+	var dateInput string
+	fmt.Scanln(&dateInput)
+	dateStr, err := normalizeBookingDate(dateInput, config.DefaultYear)
+	if err != nil {
+		fmt.Printf("日期输入错误: %v\n", err)
+		return
+	}
 
 	booked, err := api.GetSportScheduleBooked(venueID, dateStr, headers)
 	if err != nil {
