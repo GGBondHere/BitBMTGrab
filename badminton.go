@@ -323,6 +323,10 @@ func processBookingTarget(venueID int, target bookingTarget, dateStr string, hou
 			fmt.Printf("[%s] 检查订单失败: %v，约5秒后继续检查...\n", target.VenueName, err)
 			return false, nil
 		}
+		if api.IsRetryableError(err) {
+			fmt.Printf("[%s] 检查请求暂时失败: %v，约5秒后继续检查...\n", target.VenueName, err)
+			return false, nil
+		}
 
 		return false, fmt.Errorf("[%s] 检查订单失败: %v", target.VenueName, err)
 	}

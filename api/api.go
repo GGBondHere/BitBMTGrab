@@ -3,14 +3,47 @@ package api
 import (
 	"badminton/config"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
+	"net"
 	"net/http"
 	"strings"
 	"time"
 
 	"badminton/models"
 )
+
+type httpStatusError struct {
+	statusCode int
+}
+
+func (err *httpStatusError) Error() string {
+	return fmt.Sprintf("HTTP 状态异常: %d %s", err.statusCode, http.StatusText(err.statusCode))
+}
+
+// IsRetryableError 判断网络或服务临时异常，不包含接口返回的业务错误。
+func IsRetryableError(err error) bool {
+	var statusErr *httpStatusError
+	if errors.As(err, &statusErr) {
+		switch statusErr.statusCode {
+		case http.StatusRequestTimeout, http.StatusInternalServerError,
+			http.StatusBadGateway, http.StatusServiceUnavailable, http.StatusGatewayTimeout:
+			return true
+		default:
+			return false
+		}
+	}
+
+	var opErr *net.OpError
+	if errors.As(err, &opErr) {
+		return true
+	}
+
+	var netErr net.Error
+	return (errors.As(err, &netErr) && netErr.Timeout()) ||
+		errors.Is(err, io.EOF) || errors.Is(err, io.ErrUnexpectedEOF)
+}
 
 func makeRequest(url string, headers map[string]string) ([]byte, error) {
 	client := &http.Client{
@@ -30,16 +63,14 @@ func makeRequest(url string, headers map[string]string) ([]byte, error) {
 	if err != nil {
 		return nil, fmt.Errorf("发送请求失败: %w", err)
 	}
-	defer func(Body io.ReadCloser) {
-		err := Body.Close()
-		if err != nil {
-			panic(err)
-		}
-	}(res.Body)
+	defer res.Body.Close()
 
 	body, err := io.ReadAll(res.Body)
 	if err != nil {
 		return nil, fmt.Errorf("读取响应失败: %w", err)
+	}
+	if res.StatusCode < 200 || res.StatusCode >= 300 {
+		return nil, &httpStatusError{statusCode: res.StatusCode}
 	}
 	return body, nil
 }
@@ -216,6 +247,9 @@ func makePostRequest(url string, data map[string]string, headers map[string]stri
 	body, err := io.ReadAll(res.Body)
 	if err != nil {
 		return nil, fmt.Errorf("读取响应失败: %w", err)
+	}
+	if res.StatusCode < 200 || res.StatusCode >= 300 {
+		return nil, &httpStatusError{statusCode: res.StatusCode}
 	}
 
 	return body, nil
