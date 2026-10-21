@@ -1,363 +1,235 @@
-# 北理工羽毛球抢票
+<h1 align="center">北理工羽毛球抢票</h1>
 
-一个用于北理工体育馆羽毛球场地预约的命令行小工具。程序会根据你输入的场馆、日期、场地和时间段持续检查目标时段，并在可下单时尝试提交订单；检测到未支付订单后，可选发送钉钉机器人通知。
+<p align="center">
+  <a href="https://github.com/GGBondHere/BitBMTGrab/releases/latest"><img alt="最新 Release 版本" src="https://img.shields.io/github/v/release/GGBondHere/BitBMTGrab?sort=semver&label=version&style=flat-square"></a>
+  <a href="#下载运行"><img alt="支持 Windows、Linux、macOS" src="https://img.shields.io/badge/platform-Windows%20%7C%20Linux%20%7C%20macOS-0078D4?style=flat-square"></a>
+</p>
 
-## 使用提醒
+<p align="center">北理工体育馆羽毛球预约工具，支持多场地错峰检查、钉钉和 Windows 弹窗通知。</p>
 
-- 本项目仅建议本人账号自用。
-- 不要泄露 `token`、`openid`、钉钉 `Webhook` 配置，这些信息可以代表你的账号或通知机器人发起请求。
-- 不要把填写了真实配置的 `config/config.go` 上传到公开仓库。
-- 程序不能保证一定抢到场地，最终结果以体育馆预约系统实际订单为准。
+<p align="center">
+  <a href="#准备信息">准备信息</a> ·
+  <a href="#下载运行">下载运行</a> ·
+  <a href="#首次配置">首次配置</a> ·
+  <a href="#常见问题">常见问题</a> ·
+  <a href="CHANGELOG.md">变更日志</a>
+</p>
 
-## 来源与授权说明
+## 准备信息
 
-本项目基于 [YaphetLee2002/BitBMTGrab](https://github.com/YaphetLee2002/BitBMTGrab) 进行个人学习和自用修改。原仓库当前未声明开源许可证，因此本仓库不对原始代码作额外授权声明，也不建议将其用于公开分发、商业用途或超出个人自用范围的场景。
+开始前需要准备本人预约账号的 **Token 和 OpenID**。通知可选，使用钉钉时还需准备群机器人 Webhook。
 
-如果你需要长期公开维护、分发或二次开发，请自行确认原作者授权，或联系原作者补充明确的开源许可证。
+### 获取 Token 和 OpenID
 
-## 准备工作
+以 Reqable 为例：
 
-建议优先使用以下环境：
+1. 打开 Reqable 开始抓包，用微信进入“北理工体育馆”公众号的预约页面。
+2. 查看场馆、日期和时段，筛选 `http://gym.dazuiwl.cn` 的请求。
+3. 从请求头中获取 `token`。
+4. 触发提交订单请求（如 `/api/order/submit`），从请求体中获取 `openid`，不需要实际支付；若产生未支付订单，请自行处理。
 
-- Windows
-- WSL2 Debian
+预约接口使用 HTTP，不需要安装 CA 证书；抓取 HTTPS 请求时才涉及证书和信任设置。**抓包记录包含账号凭据，请勿公开。**
 
-项目只在 Windows 和 WSL2 Debian 上做过实际测试。Go 官方提供 Windows、macOS、Linux 的安装包，所以 Linux/macOS 理论上也可以运行；主要差别通常只是编译输出文件名是否带 `.exe`。
+### 准备钉钉机器人（可选）
 
-你需要准备：
-
-- Go 环境：[Go 官方下载页](https://go.dev/dl/)
-- 抓包工具，例如 Reqable
-- 微信，登录你自己的账号
-- 钉钉自定义机器人，可选，用于抢到后通知，防止抢到后错过 15 分钟支付有效期
-- Windows 弹窗通知，可选，适合电脑前使用
-
-## 抓取 token 与 openid
-
-下面以 Reqable 为例。
-
-1. 打开 Reqable，开始抓包。
-2. 使用微信打开“北理工体育馆”公众号的预约功能。
-3. 在预约页面随便进行一些操作，例如查看场馆、日期、时段、提交预约的订单信息。
-4. 在 Reqable 中筛选：
+在钉钉群创建自定义机器人，安全策略选择“自定义关键词”，填写 `抢票通知`，复制完整 Webhook，留待初始化时填写。例如：
 
 ```text
-http://gym.dazuiwl.cn
+https://oapi.dingtalk.com/robot/send?access_token=xxx
 ```
 
-5. 找到请求里的 `token` 和 `openid`：
-   - `token`：通常大多数接口的请求头里都能看到，可以找一找。
-   - `openid`：通常在点击“提交订单-提交并支付订单”后相关接口（例如 `/api/order/submit`）的请求体里可以找到，不需要真支付。
+创建步骤见 [钉钉机器人文档](https://open.dingtalk.com/document/dingstart/custom-bot-creation-and-installation)。
 
-目前公众号预约接口是 HTTP 请求，通常可以直接查看内容，不需要安装 CA 证书，只有抓 HTTPS 请求时，才涉及安装 CA 证书和信任证书。
+## 下载运行
 
-## 安装 Go 环境
+从 [Releases](https://github.com/GGBondHere/BitBMTGrab/releases) 或下表下载，无需安装 Go。Intel/AMD 电脑选 `amd64`，ARM 电脑选 `arm64`；WSL 使用 Linux 版本。
 
-安装 Go 可参考 Go 官方下载页，安装完成后在终端验证：
+| 系统 | amd64 | arm64 |
+| --- | --- | --- |
+| Windows | [下载](https://github.com/GGBondHere/BitBMTGrab/releases/latest/download/badminton_windows_amd64.exe) | [下载](https://github.com/GGBondHere/BitBMTGrab/releases/latest/download/badminton_windows_arm64.exe) |
+| Linux / WSL | [下载](https://github.com/GGBondHere/BitBMTGrab/releases/latest/download/badminton_linux_amd64) | [下载](https://github.com/GGBondHere/BitBMTGrab/releases/latest/download/badminton_linux_arm64) |
+| macOS | [Intel Mac](https://github.com/GGBondHere/BitBMTGrab/releases/latest/download/badminton_darwin_amd64) | [Apple 芯片 Mac](https://github.com/GGBondHere/BitBMTGrab/releases/latest/download/badminton_darwin_arm64) |
+
+### Windows
+
+下载后在文件所在目录打开 PowerShell，运行程序，例如：
 
 ```powershell
-go version
+.\badminton_windows_amd64.exe
 ```
 
-`go.mod` 中写的是：
+### Linux / WSL
 
-```text
-go 1.23
-```
-
-使用 Go 1.23 或更新版本均可尝试，本地测试使用 Go 1.26.3 版本也能运行。
-
-## 获取项目源码
-
-方式一：使用 Git 克隆。
-
-```powershell
-git clone <仓库地址>
-cd BitBMTGrab
-```
-
-方式二：下载 ZIP，解压后进入项目目录。
-
-```powershell
-cd <解压后的项目目录>
-```
-
-## 配置账号信息
-
-打开 [config/config.go](config/config.go)，填写：
-
-```go
-const ApiToken = "替换为你的token"
-const OpenId = "替换为你的openid"
-```
-
-示例：
-
-```go
-const ApiToken = "xxxxxxxx"
-const OpenId = "xxxxxxxx"
-```
-
-这些配置不要泄露。
-
-如果你经常使用同一个校区，也可以提前配置默认场馆 ID：
-
-```go
-const DefaultVenueID = 25
-```
-
-留 `0` 表示启动时继续询问场馆 ID：
-
-```go
-const DefaultVenueID = 0
-```
-
-如果你想少输入年份，也可以提前配置默认年份：
-
-```go
-const DefaultYear = 2026
-```
-
-配置后，运行时日期只需要输入 `MMDD`。留 `0` 表示运行时输入完整 `YYYYMMDD`。
-
-## 配置钉钉通知（可选）
-
-钉钉自定义机器人可以通过 Webhook 向群里发送消息。参考：[钉钉开发者百科：创建自定义机器人](https://open.dingtalk.com/document/dingstart/custom-bot-creation-and-installation)。
-
-配置步骤：
-
-1. 在钉钉群里添加“自定义机器人”。
-2. 安全设置选择“自定义关键词”。
-3. 关键词建议设置为：
-
-```text
-抢票通知
-```
-
-4. 复制机器人 Webhook URL，填写到 [config/config.go](config/config.go)：
-
-```go
-const DingTalkWebhook = "https://oapi.dingtalk.com/robot/send?access_token=xxx"
-```
-
-如果不需要钉钉通知，保持空字符串即可：
-
-```go
-const DingTalkWebhook = ""
-```
-
-测试钉钉通知：
-
-```powershell
-go run . --testdingtalk
-```
-
-如果已经编译过，也可以直接用编译后的文件测试：
-
-```powershell
-.\badminton.exe --testdingtalk
-```
-
-如果配置正确，钉钉群会收到一条测试消息。默认通知标题包含“抢票通知”，用于匹配钉钉机器人关键词策略。
-
-## 配置 Windows 弹窗通知（可选）
-
-如果你在 Windows 或 WSL2 Debian 中运行程序，可以启用 Windows 弹窗通知。它不是右下角 toast 通知，而是普通弹窗，抢到后需要你手动关闭。
-
-打开 [config/config.go](config/config.go)，把：
-
-```go
-const EnableWindowsNotification = false
-```
-
-改成：
-
-```go
-const EnableWindowsNotification = true
-```
-
-测试 Windows 弹窗：
-
-```powershell
-go run . --testwin
-```
-
-如果已经编译过，也可以直接用编译后的文件测试：
-
-```powershell
-.\badminton.exe --testwin
-```
-
-WSL2 Debian 下也会尝试调用 Windows 的 `powershell.exe` 来显示弹窗。如果提示找不到 `powershell.exe`，请检查 WSL 是否启用了 Windows interop。Linux/macOS 不支持这种 Windows 弹窗通知，但仍可以使用钉钉通知。
-
-## 运行程序
-
-直接运行：
-
-```powershell
-go run .
-```
-
-编译后运行：
-
-Windows：
-
-```powershell
-go build -o badminton.exe .
-.\badminton.exe
-.\badminton.exe --testdingtalk
-.\badminton.exe --testwin
-```
-
-WSL2 Debian / Linux / macOS：
+一行安装并启动，自动识别架构：
 
 ```bash
-go build -o badminton .
-./badminton
-./badminton --testdingtalk
-./badminton --testwin
+curl -fsSL https://raw.githubusercontent.com/GGBondHere/BitBMTGrab/main/install.sh | sh
 ```
 
-输出文件名可以自己改，Windows 通常使用 `.exe` 后缀，Linux/macOS/WSL 通常不需要后缀。编译后的文件也支持测试参数；如果过几天发现通知异常，可以先用编译后的文件带参数重新测试，不必重新 `go run`。
+安装后运行 `bmt` 启动。也可从上表下载二进制，赋予执行权限后直接运行。
 
-## 输入预约参数
+### macOS
 
-程序启动后会依次要求输入：
+下载后在终端中赋予执行权限并运行。以下以 Apple 芯片版本为例：
 
-1. 场馆 ID
-2. 预约日期
-3. 场地名称或编号，一个或多个
-4. 预约开始小时
+```bash
+chmod +x badminton_darwin_arm64 && ./badminton_darwin_arm64
+```
 
-场馆 ID：
+## 首次配置
+
+首次启动依次填写三组表单，完成后保存：
+
+| 表单 | 内容 |
+| --- | --- |
+| 账号信息 | Token、OpenID，均为必填 |
+| 默认参数 | 场馆 ID、年份，留空或填 `0` 表示不预设 |
+| 通知 | 钉钉 Webhook（可选）、Windows 弹窗开关（默认关闭） |
+
+方向键选择、Enter 确认，Ctrl+C 取消当前表单；中途取消不保存。以后在主菜单的 **修改配置** 中编辑单项。
+
+## 通知与测试
+
+- **钉钉**：填写 Webhook 即启用，留空或选择“禁用钉钉通知（清空 Webhook）”关闭。仅支持关键词策略，不支持加签或 @。
+- **Windows 弹窗**：普通消息框，需手动关闭，不需要管理员权限。支持 Windows 和可调用 `powershell.exe` 的 WSL，普通 Linux/macOS 不支持。
+
+启用通知后，在主菜单选择 **测试通知 → 钉钉通知 / Windows 弹窗**。菜单只显示可用渠道；没有可测试项时，先在“修改配置”中启用。测试弹窗关闭后返回菜单。
+
+确认目标未支付订单后才发送通知，**通知失败不影响订单，请及时支付**。正式弹窗启动后不等待关闭，钉钉通知等待接口响应，超时约 10 秒。
+
+## 开始抢票
+
+选择“开始抢票”，输入场馆、日期、场地和开始小时。已设置的默认场馆会直接使用，程序会显示场地预订表供参考。
 
 ```text
-25 - 良乡
-51 - 中关村
-54 - 中关村早晚场
+场馆 ID：25
+预约日期：20261025（默认年份为 2026 时可输入 1025）
+场地名称或编号：1-3,5
+预约开始小时：17
 ```
 
-示例输入：
+| 参数 | 输入规则 |
+| --- | --- |
+| 场馆 | `25` 良乡、`51` 中关村、`54` 中关村早晚场 |
+| 日期 | `YYYYMMDD` 或 `YYYY-MM-DD`；有默认年份时可输入 `MMDD`，不支持 `MM-DD` 或混用横杠 |
+| 场地 | 完整名称或末尾编号，如 `场4`、`4`；多个用英文 `,` 或中文 `，` 分隔，如 `1,2,3` |
+| 范围 | `1-5`、`场1-场5`、`1-3,5`；数字范围可跨名称前缀，如 `8-10` 匹配 `主馆8,副馆9,副馆10` |
+| 时间 | 开始小时，如 `17` 表示 `17:00-18:00` |
 
-```text
-请输入场馆ID（25-良乡，51-中关村，54-中关村早晚场）: 25
-请输入预订日期（格式：YYYYMMDD）: 20260511
-请输入场地名称或编号（多个用逗号分隔，最多5个）: 4
-请输入预订时间（小时，例如9表示09:00开始的时段）: 17
-```
+一次最多 5 个备选场地，均为同一场馆、同一天、同一小时。不支持空项、空格、重复场地、倒序范围或前缀不一致的名称范围；编号有歧义时填写完整名称，编号不是表格列序号。
 
-其中：
+场地按输入顺序错峰检查，相邻间隔约 `5秒 / 场地数量`，一轮约 5 秒，请求耗时另计。抢到任意一个后停止其他场地，只提交单场地订单。
 
-- 日期推荐输入 `YYYYMMDD` 格式；如果在配置中填写了 `DefaultYear`，则只需要输入 `MMDD`。
-- 场地可以输入程序打印的完整名称，也可以只输入名称末尾的数字编号，例如 `4` 自动匹配 `场4` 或 `主馆4`。编号不是表格列序号；同一编号对应多个场地时会报错，需要使用完整名称。
-- 多个场地可以用英文逗号 `,` 或中文逗号 `，` 分隔，例如 `1,2,3` 或 `场1，场2，场3`；也可以用范围写法，例如 `1-5`、`场1-场5`，或混合输入 `1-3,5`。数字范围可以跨名称前缀，例如 `8-10` 自动匹配 `主馆8,副馆9,副馆10`。
-- 一次最多输入 5 个场地。重复场地（包括 `1,主馆1` 这种匹配到同一场地的输入）、空场地名、场地名前后带空格都会报错退出。日志和通知使用实际场地名称。
-- 时间只输入开始小时，例如 `17` 表示 `17:00` 开始的时段。
+## 运行状态
 
-## 运行状态说明
-
-程序会先打印目标日期的场地预订情况，然后进入检查和下单流程。
-
-如果输入了多个场地，程序不会并发请求，而是按输入顺序错峰检查。总检查周期约 5 秒，相邻两个场地的间隔约为 `5秒 / 场地数量`，例如输入 5 个场地时，大约每 1 秒检查下一个场地，每个场地和自己的下一次检查间隔约 5 秒。抢到任意一个场地后，程序会发送通知并退出。
-
-常见输出含义：
-
-```text
-[场1] 检查订单失败: 订单检查失败: 场地该时间段预约中，约5秒后继续检查...
-```
-
-目标时段当前不可下单，但属于可等待状态。程序会每 5 秒继续检查。
-
-检查请求超时、连接失败、响应读取中断，或收到 HTTP 408、500、502、503、504 时，也会按原有错峰节奏继续检查，不会因一次临时故障直接退出。
-
-```text
-[场1] 检查通过，准备进入下单流程...
-```
-
-`CheckSportSchedule` 检查通过，程序准备尝试提交订单。
-
-```text
-[场1] 提交订单失败: xxx，下轮回到检查阶段...
-```
-
-提交接口失败，程序不会继续硬提交，而是在该场地下轮检查时重新回到检查阶段。
-
-```text
-[场1] 订单提交成功，开始确认订单...
-```
-
-提交接口返回成功，程序开始查询未支付订单列表。
-
-```text
-[场1] 已检测到订单 123，正在等待支付...
-```
-
-程序检测到未支付订单，说明已经抢到待支付订单，此时如果配置了钉钉 Webhook，会发送钉钉通知，如果启用了 Windows 弹窗通知，还会弹出一个 Windows 消息框提醒你前往支付。
-
-建议每次使用时先观察一轮检查输出，因为接口返回的业务错误仍然只对“预约中”状态持续等待；如果接口返回的是其他状态，例如：
-
-```text
-场地该时间段上课中
-场地该时间段包场中
-```
-
-程序会认为这不是可恢复的临时状态，并直接退出。
-
-程序在 `07:00:00` 到 `23:30:00` 之间会尝试立刻下单；如果不在这个时间范围内，会等待到下一个早上 7 点再继续。
+- **预约中**：持续检查；临时网络错误也会重试。上课中、包场中、超过每日预约次数等其他业务错误会退出，建议开始后先观察一轮。
+- **检查通过**：立即尝试提交；提交失败则下轮重新检查。
+- **提交成功**：每 5 秒确认本次预约的未支付订单，不重复提交。
+- **已确认目标订单**：抢票成功但尚未支付，发送通知后退出。抢票过程中可用 Ctrl+C 停止。
+- 可下单时段为系统本地时间 `07:00:00-23:30:00`，其他时间等待下一个早上 7 点；预约日期不会自动改变。请将运行环境设为北京时间。
 
 ## 常见问题
 
-### `go` 命令找不到
+<details>
+<summary><strong>Linux 服务器无法直接下载？</strong></summary>
 
-说明 Go 没安装好，或者环境变量没有配置好。重新安装 Go 后，打开一个新的终端执行：
+可为终端配置代理，或使用自行信任的镜像源；也可在其他设备下载对应的 Linux 二进制，上传到服务器后赋予执行权限并运行。
 
-```powershell
-go version
+</details>
+
+<details>
+<summary><strong>如何更新，配置会被覆盖吗？</strong></summary>
+
+先停止程序，下载同平台、同架构的新版本，覆盖原可执行文件。Linux / WSL 可重新执行一行安装命令更新并启动，`bmt` 保持不变。
+
+配置独立保存在用户目录，更新程序后使用同一系统用户启动即可沿用。
+
+</details>
+
+<details>
+<summary><strong>配置保存在哪里？</strong></summary>
+
+启动时会打印实际位置，默认如下：
+
+| 环境 | 默认位置 |
+| --- | --- |
+| Windows | `%APPDATA%\BitBMTGrab\config.json` |
+| Linux / WSL | `~/.config/BitBMTGrab/config.json`，遵循 `XDG_CONFIG_HOME` |
+| macOS | `~/Library/Application Support/BitBMTGrab/config.json` |
+
+配置按系统用户保存，不随工作目录改变。Windows、WSL、root 和普通用户默认各用一份。Linux/macOS 配置目录和文件权限分别为 `0700`、`0600`。
+
+Linux 一行安装将程序保存为配置目录中的 `badminton`，更新时保留 `config.json`。短命令位于 `/usr/local/bin/bmt`（root）或 `~/.local/bin/bmt`（普通用户）；若不在 `PATH` 中，按安装提示添加。
+
+</details>
+
+<details>
+<summary><strong>以前在 config.go 中填写过信息，如何迁移？</strong></summary>
+
+首次启动时，将旧配置中的账号、默认参数和通知设置填入菜单即可。旧版配置不会自动导入。
+
+</details>
+
+<details>
+<summary><strong>配置或通知不生效？</strong></summary>
+
+先核对启动时打印的配置位置，修改后重新启动正在抢票的进程，运行期间不会热加载。Token / OpenID 失效时重新抓包，通过“修改配置”更新。
+
+在主菜单选择“测试通知”：钉钉检查完整 URL 和关键词 `抢票通知`；Windows 检查开关和 `powershell.exe` 是否可用。“弹窗已启动”仅表示 PowerShell 启动成功，不保证弹窗已显示在最前面。
+
+</details>
+
+<details>
+<summary><strong>为什么一直没有抢到？</strong></summary>
+
+先在公众号确认目标时段是否可预约，再查看终端是否提示账号失效、网络异常或预约次数限制。
+
+</details>
+
+## 使用提醒
+
+- 仅建议本人账号自用，程序不能保证抢到场地，最终以预约系统订单为准。
+- 请遵守学校及预约平台规定；如禁止脚本或自动化预约，请勿使用本工具。违规使用导致的账号限制、预约取消等后果由使用者自行承担。
+- Token、OpenID 和 Webhook 保存在本机明文配置中，界面遮蔽不等于加密；不要公开配置文件或账号凭据。
+
+## 开发
+
+安装 [Go 1.23+](https://go.dev/dl/)，克隆仓库后进入项目目录，可用 `go run .` 启动，或自行编译：
+
+```bash
+go build -o badminton.exe .  # Windows
+go build -o badminton .      # Linux / WSL / macOS
 ```
 
-### `token` 或 `openid` 失效
+源码编译同样使用 TUI 菜单和用户配置，本地构建版本号显示为 `dev`。
 
-重新抓包并更新 [config/config.go](config/config.go) 中的 `ApiToken` 和 `OpenId`。
+## 目录结构
 
-### 场地名称不匹配
-
-完整场地名称按精确匹配处理，纯数字输入按场地名称末尾的编号匹配。请参考程序打印的场地名称；如果编号对应多个场地，需要输入完整名称以消除歧义。
-
-### 钉钉通知不触发
-
-检查：
-
-- `DingTalkWebhook` 是否为空。
-- Webhook URL 是否完整。
-- 钉钉机器人是否启用了关键词安全策略。
-- 钉钉机器人配置的关键词是否能匹配通知标题里的“抢票通知”。
-
-可以先运行：
-
-```powershell
-go run . --testdingtalk
-.\badminton.exe --testdingtalk
+```text
+BitBMTGrab/
+├── install.sh                  # Linux / WSL 安装与 bmt 短命令
+├── main.go                     # 程序入口
+├── app/
+│   ├── app.go                  # 启动流程与命令行参数
+│   ├── tui.go                  # 初始化、配置编辑与交互菜单
+│   ├── badminton.go            # 场地选择、错峰检查与下单流程
+│   ├── notify.go               # 钉钉和 Windows 弹窗通知
+│   ├── api.go                  # 预约接口请求与网络错误处理
+│   ├── config.go               # 用户配置加载、校验与保存
+│   ├── model.go                # 接口数据结构
+│   └── string.go               # 接口数据的文本输出
+├── .github/workflows/
+│   └── release.yml             # 按版本标签构建和发布程序
+├── go.mod                      # Go 版本与依赖声明
+├── go.sum                      # 依赖校验记录
+├── CHANGELOG.md                # 版本变更日志
+├── LICENSE                     # MIT 许可证
+├── THIRD_PARTY_NOTICES.md      # 第三方版权与许可
+└── README.md
 ```
 
-如果仍然失败，根据控制台打印的钉钉错误信息继续排查，也可以把错误信息发给 AI 辅助分析。
+## 许可证与致谢
 
-### Windows 弹窗通知不触发
+许可信息见 [LICENSE](LICENSE) 和 [第三方声明](THIRD_PARTY_NOTICES.md)。
 
-检查：
-
-- `EnableWindowsNotification` 是否设置为 `true`。
-- 当前环境是否是 Windows 或 WSL2。
-- WSL2 中是否可以直接执行 `powershell.exe`。
-
-可以先运行：
-
-```powershell
-go run . --testwin
-.\badminton.exe --testwin
-```
-
-如果仍然失败，根据控制台打印的 Windows 通知错误继续排查。
-
-### 程序一直没有抢到
-
-可能是目标时段一直没有释放、网络较慢、接口限制、账号状态异常或场地不可预约，程序只能自动执行检查和提交，不能绕过预约系统规则。
+感谢 [YaphetLee2002/BitBMTGrab](https://github.com/YaphetLee2002/BitBMTGrab) 提供的初始实现。

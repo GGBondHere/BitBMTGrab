@@ -1,0 +1,81 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    env:
+      CGO_ENABLED: '0'
+      RELEASE_TAG: ${{ github.ref_name }}
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+
+      - uses: actions/setup-go@v6
+        with:
+          go-version: '1.26.3'
+          cache: true
+
+      - name: Read version changelog
+        shell: bash
+        run: |
+          set -euo pipefail
+          awk -v version="${GITHUB_REF_NAME#v}" '
+            { sub(/\r$/, "") }
+            /^## / {
+              matched = ($2 == "[" version "]")
+              if (matched) count++
+              active = (matched && NF == 4 && $3 == "-")
+              next
+            }
+            active {
+              print
+              if ($0 ~ /^[[:space:]]*[^#[:space:]]/) content = 1
+            }
+            END {
+              if (count != 1 || !content) {
+                print "CHANGELOG.md 中版本 " version " 必须唯一、标题格式正确且正文非空" > "/dev/stderr"
+                exit 1
+              }
+            }
+          ' CHANGELOG.md > release-notes.md
+
+      - name: Build binaries
+        shell: bash
+        run: |
+          set -euo pipefail
+          [[ "$RELEASE_TAG" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]] || { echo "版本 tag 必须为 vX.Y.Z" >&2; exit 1; }
+          mkdir -p dist
+          for target_os in windows linux darwin; do
+            for target_arch in amd64 arm64; do
+              binary="badminton_${target_os}_${target_arch}"
+              if [[ "$target_os" == windows ]]; then
+                binary="$binary.exe"
+              fi
+              GOOS="$target_os" GOARCH="$target_arch" go build -mod=readonly -trimpath \
+                -ldflags="-X main.version=$RELEASE_TAG" -o "dist/$binary" .
+            done
+          done
+
+      - name: Publish release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          gh release create "$RELEASE_TAG" dist/badminton_* THIRD_PARTY_NOTICES.md \
+            --verify-tag --title "$RELEASE_TAG" --notes-file release-notes.md

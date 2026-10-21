@@ -1,7 +1,6 @@
-package api
+package app
 
 import (
-	"badminton/config"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -10,8 +9,6 @@ import (
 	"net/http"
 	"strings"
 	"time"
-
-	"badminton/models"
 )
 
 type httpStatusError struct {
@@ -50,7 +47,7 @@ func makeRequest(url string, headers map[string]string) ([]byte, error) {
 		Timeout: 10 * time.Second,
 	}
 
-	req, err := http.NewRequest("GET", config.ApiHost+url, nil)
+	req, err := http.NewRequest("GET", ApiHost+url, nil)
 	if err != nil {
 		return nil, fmt.Errorf("创建请求失败: %w", err)
 	}
@@ -76,7 +73,7 @@ func makeRequest(url string, headers map[string]string) ([]byte, error) {
 }
 
 // GetSportEventsField 获取指定ID的场馆信息
-func GetSportEventsField(id int, headers map[string]string) (map[string]*models.Venue, error) {
+func GetSportEventsField(id int, headers map[string]string) (map[string]*Venue, error) {
 	// 打印请求信息
 	fmt.Printf("正在获取场馆ID %d 的信息...\n", id)
 	url := fmt.Sprintf("/api/sport_events/field/id/%d", id)
@@ -86,7 +83,7 @@ func GetSportEventsField(id int, headers map[string]string) (map[string]*models.
 		return nil, err
 	}
 
-	var response models.Response[map[string]*models.Venue]
+	var response Response[map[string]*Venue]
 
 	if err := json.Unmarshal(body, &response); err != nil {
 		return nil, fmt.Errorf("解析场馆信息失败: %w", err)
@@ -106,7 +103,7 @@ func GetSportEventsField(id int, headers map[string]string) (map[string]*models.
 }
 
 // GetSportEventsHour 获取指定ID的时间段信息
-func GetSportEventsHour(id int, headers map[string]string) ([]*models.SportEventsHour, error) {
+func GetSportEventsHour(id int, headers map[string]string) ([]*SportEventsHour, error) {
 	fmt.Printf("正在获取场馆ID %d 的时间段信息...\n", id)
 	url := fmt.Sprintf("/api/sport_events/hour/id/%d", id)
 
@@ -115,7 +112,7 @@ func GetSportEventsHour(id int, headers map[string]string) ([]*models.SportEvent
 		return nil, err
 	}
 
-	var response models.Response[[]*models.SportEventsHour]
+	var response Response[[]*SportEventsHour]
 
 	if err := json.Unmarshal(body, &response); err != nil {
 		return nil, fmt.Errorf("解析时间段信息失败: %w", err)
@@ -135,7 +132,7 @@ func GetSportEventsHour(id int, headers map[string]string) ([]*models.SportEvent
 }
 
 // GetSportScheduleBooked 获取指定日期的场地预订信息
-func GetSportScheduleBooked(id int, day string, headers map[string]string) (*models.SportScheduleBooked, error) {
+func GetSportScheduleBooked(id int, day string, headers map[string]string) (*SportScheduleBooked, error) {
 	fmt.Printf("正在获取场馆ID %d 在 %s 的预订信息...\n", id, day)
 	url := fmt.Sprintf("/api/sport_schedule/booked/id/%d?day=%s", id, day)
 
@@ -144,7 +141,7 @@ func GetSportScheduleBooked(id int, day string, headers map[string]string) (*mod
 		return nil, err
 	}
 
-	var response models.SportScheduleBooked
+	var response SportScheduleBooked
 	if err := json.Unmarshal(body, &response); err != nil {
 		return nil, fmt.Errorf("解析场地预订信息失败: %w", err)
 	}
@@ -163,17 +160,16 @@ func GetSportScheduleBooked(id int, day string, headers map[string]string) (*mod
 }
 
 // GetSportEventsPrice 获取指定场馆的价格信息
-func GetSportEventsPrice(id int, week int, day string, headers map[string]string) (*models.SportEventsPrice, error) {
+func GetSportEventsPrice(id int, week int, day string, headers map[string]string) (*SportEventsPrice, error) {
 	fmt.Printf("正在获取场馆ID %d 在星期 %d, 日期 %s 的价格信息...\n", id, week, day)
 	url := fmt.Sprintf("/api/sport_events/price/id/%d?week=%d&day=%s", id, week, day)
 
-	headers["token"] = config.ApiToken
 	body, err := makeRequest(url, headers)
 	if err != nil {
 		return nil, err
 	}
 
-	var response models.SportEventsPrice
+	var response SportEventsPrice
 	if err := json.Unmarshal(body, &response); err != nil {
 		return nil, fmt.Errorf("解析价格信息失败: %w", err)
 	}
@@ -191,17 +187,16 @@ func GetSportEventsPrice(id int, week int, day string, headers map[string]string
 }
 
 // GetOrderList 获取订单列表
-func GetOrderList(orderType string, status string, orderID string, page int, limit int, headers map[string]string) (*models.OrderList, error) {
+func GetOrderList(orderType string, status string, orderID string, page int, limit int, headers map[string]string) (*OrderList, error) {
 	fmt.Printf("正在获取订单列表，类型：%s，状态：%s，订单号：%s，页码：%d，每页数量：%d...\n", orderType, status, orderID, page, limit)
 	url := fmt.Sprintf("/api/order/index?ordertype=%s&status=%s&orderid=%s&page=%d&limit=%d", orderType, status, orderID, page, limit)
 
-	headers["token"] = config.ApiToken
 	body, err := makeRequest(url, headers)
 	if err != nil {
 		return nil, err
 	}
 
-	var response models.OrderList
+	var response OrderList
 	if err := json.Unmarshal(body, &response); err != nil {
 		return nil, fmt.Errorf("解析订单列表失败: %w", err)
 	}
@@ -228,7 +223,7 @@ func makePostRequest(url string, data map[string]string, headers map[string]stri
 	}
 	formDataStr := strings.Join(formData, "&")
 
-	req, err := http.NewRequest("POST", config.ApiHost+url, strings.NewReader(formDataStr))
+	req, err := http.NewRequest("POST", ApiHost+url, strings.NewReader(formDataStr))
 	if err != nil {
 		return nil, fmt.Errorf("创建请求失败: %w", err)
 	}
@@ -256,20 +251,19 @@ func makePostRequest(url string, data map[string]string, headers map[string]stri
 }
 
 // CheckSportSchedule 检查订单是否可以下单
-func CheckSportSchedule(id int, scene string, headers map[string]string) (*models.CheckOrderResponse, error) {
+func CheckSportSchedule(id int, scene string, headers map[string]string) (*CheckOrderResponse, error) {
 	url := fmt.Sprintf("/api/sport_schedule/check/id/%d", id)
 
 	data := map[string]string{
 		"scene": scene,
 	}
 
-	headers["token"] = config.ApiToken
 	body, err := makePostRequest(url, data, headers)
 	if err != nil {
 		return nil, err
 	}
 
-	var response models.CheckOrderResponse
+	var response CheckOrderResponse
 	if err := json.Unmarshal(body, &response); err != nil {
 		return nil, fmt.Errorf("解析订单检查信息失败: %w", err)
 	}
@@ -287,7 +281,7 @@ func CheckSportSchedule(id int, scene string, headers map[string]string) (*model
 }
 
 // SubmitOrder 提交订单
-func SubmitOrder(sportEventsId int, money int, scene string, headers map[string]string) (*models.OrderResponse, error) {
+func SubmitOrder(sportEventsId int, money int, scene string, openID string, headers map[string]string) (*OrderResponse, error) {
 	fmt.Printf("正在提交订单，场馆ID: %d, 金额: %d元...\n", sportEventsId, money)
 	url := "/api/order/submit"
 
@@ -299,16 +293,15 @@ func SubmitOrder(sportEventsId int, money int, scene string, headers map[string]
 		"ordertype":       "makeappointment",
 		"paytype":         "bitpay",
 		"scene":           scene,
-		"openid":          config.OpenId,
+		"openid":          openID,
 	}
 
-	headers["token"] = config.ApiToken
 	body, err := makePostRequest(url, data, headers)
 	if err != nil {
 		return nil, err
 	}
 
-	var response models.OrderResponse
+	var response OrderResponse
 	if err := json.Unmarshal(body, &response); err != nil {
 		return nil, fmt.Errorf("解析订单提交响应失败: %w", err)
 	}

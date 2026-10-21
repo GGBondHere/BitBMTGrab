@@ -1,13 +1,13 @@
-package main
+package app
 
 import (
-	"badminton/config"
 	"bytes"
 	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
 	"net/http"
+	"net/url"
 	"os/exec"
 	"strings"
 	"time"
@@ -28,15 +28,17 @@ type dingTalkResponse struct {
 	ErrMsg  string `json:"errmsg"`
 }
 
-func dingTalkWebhook() string {
-	return strings.TrimSpace(config.DingTalkWebhook)
-}
-
-func sendDingTalkMarkdown(title, text string) error {
-	webhook := dingTalkWebhook()
+func sendDingTalkMarkdown(webhook, title, text string) (err error) {
+	webhook = strings.TrimSpace(webhook)
 	if webhook == "" {
 		return nil
 	}
+	// HTTP 错误可能携带整个 URL，不能把 access_token 打进日志。
+	defer func() {
+		if err != nil {
+			err = redactWebhookError(err, webhook)
+		}
+	}()
 
 	var payload dingTalkMarkdownRequest
 	payload.MsgType = "markdown"
@@ -75,10 +77,25 @@ func sendDingTalkMarkdown(title, text string) error {
 	return nil
 }
 
-func sendOrderNotice(venueID int, venueName string, dateStr string, hour int, orderID int, amount int) error {
-	title := dingTalkNoticeKeyword + " - 已检测到订单"
+func redactWebhookError(err error, webhook string) error {
+	message := strings.ReplaceAll(err.Error(), webhook, "[Webhook]")
+	parsed, parseErr := url.Parse(webhook)
+	if parseErr == nil {
+		for _, values := range parsed.Query() {
+			for _, value := range values {
+				if value != "" {
+					message = strings.ReplaceAll(message, value, "[已隐藏]")
+				}
+			}
+		}
+	}
+	return errors.New(message)
+}
+
+func sendOrderNotice(settings Settings, venueID int, venueName string, dateStr string, hour int, orderID int, amount int) error {
+	title := dingTalkNoticeKeyword + " - 抢票成功，待支付"
 	text := fmt.Sprintf(
-		"### 已检测到订单\n\n- 场馆ID: %d\n- 场地: %s\n- 日期: %s\n- 时间: %02d:00\n- 订单ID: %d\n- 金额: %d元\n\n请尽快前往支付。",
+		"### 抢票成功，待支付\n\n- 场馆ID: %d\n- 场地: %s\n- 日期: %s\n- 时间: %02d:00\n- 订单ID: %d\n- 金额: %d元\n\n请尽快前往支付。",
 		venueID,
 		venueName,
 		dateStr,
@@ -87,28 +104,28 @@ func sendOrderNotice(venueID int, venueName string, dateStr string, hour int, or
 		amount,
 	)
 
-	return sendDingTalkMarkdown(title, text)
+	return sendDingTalkMarkdown(settings.DingTalkWebhook, title, text)
 }
 
-func sendDingTalkTestNotice() error {
-	if dingTalkWebhook() == "" {
-		return errors.New("钉钉通知未启用：请先在 config.DingTalkWebhook 中填写完整机器人 Webhook")
+func sendDingTalkTestNotice(settings Settings) error {
+	if strings.TrimSpace(settings.DingTalkWebhook) == "" {
+		return errors.New("钉钉通知未启用，请在“修改配置”中填写机器人 Webhook")
 	}
 
 	title := dingTalkNoticeKeyword + " - 测试消息"
 	text := "### 测试消息\n\n这是一条钉钉机器人测试消息，用于验证 Webhook 是否可用。"
 
-	return sendDingTalkMarkdown(title, text)
+	return sendDingTalkMarkdown(settings.DingTalkWebhook, title, text)
 }
 
-func showWindowsOrderNotice(venueID int, venueName string, dateStr string, hour int, orderID int, amount int) error {
-	if !config.EnableWindowsNotification {
+func showWindowsOrderNotice(settings Settings, venueID int, venueName string, dateStr string, hour int, orderID int, amount int) error {
+	if !settings.EnableWindowsNotification {
 		return nil
 	}
 
-	title := dingTalkNoticeKeyword + " - 已检测到订单"
+	title := dingTalkNoticeKeyword + " - 抢票成功，待支付"
 	message := fmt.Sprintf(
-		"已检测到订单\n\n场馆ID: %d\n场地: %s\n日期: %s\n时间: %02d:00\n订单ID: %d\n金额: %d元\n\n请尽快前往支付。",
+		"抢票成功，待支付\n\n场馆ID: %d\n场地: %s\n日期: %s\n时间: %02d:00\n订单ID: %d\n金额: %d元\n\n请尽快前往支付。",
 		venueID,
 		venueName,
 		dateStr,
@@ -120,9 +137,9 @@ func showWindowsOrderNotice(venueID int, venueName string, dateStr string, hour 
 	return showWindowsMessageBox(title, message, false)
 }
 
-func showWindowsTestNotice() error {
-	if !config.EnableWindowsNotification {
-		return errors.New("Windows 通知未启用：请先在 config.EnableWindowsNotification 中设置为 true")
+func showWindowsTestNotice(settings Settings) error {
+	if !settings.EnableWindowsNotification {
+		return errors.New("Windows 通知未启用，请在“修改配置”中启用 Windows 弹窗")
 	}
 
 	return showWindowsMessageBox(

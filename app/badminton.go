@@ -1,11 +1,8 @@
-package main
+package app
 
 import (
-	"badminton/api"
-	"badminton/config"
-	"badminton/models"
+	"encoding/json"
 	"fmt"
-	"os"
 	"sort"
 	"strconv"
 	"strings"
@@ -20,11 +17,12 @@ const (
 type bookingTarget struct {
 	VenueName    string
 	VenueFieldID string
+	HourID       int
 	Scene        string
 }
 
 // formatAvailableVenues 格式化并输出场地可用信息
-func formatAvailableVenues(venues map[string]*models.Venue, hours []*models.SportEventsHour, booked *models.SportScheduleBooked) {
+func formatAvailableVenues(venues map[string]*Venue, hours []*SportEventsHour, booked *SportScheduleBooked) {
 	var venueKeys []string
 	for key := range venues {
 		venueKeys = append(venueKeys, key)
@@ -115,7 +113,7 @@ func normalizeBookingDate(input string, defaultYear int) (string, error) {
 }
 
 // findVenueIDByName 根据完整名称或名称末尾的编号查找场地ID
-func findVenueIDByName(venues map[string]*models.Venue, name string) (string, error) {
+func findVenueIDByName(venues map[string]*Venue, name string) (string, error) {
 	prefix, number, _, err := splitVenueNameNumber(name)
 	if err == nil && prefix == "" {
 		var matchedID string
@@ -147,7 +145,7 @@ func findVenueIDByName(venues map[string]*models.Venue, name string) (string, er
 }
 
 // findHourIDByTime 根据时间（小时）查找对应的时间段ID
-func findHourIDByTime(hours []*models.SportEventsHour, hour int) (int, error) {
+func findHourIDByTime(hours []*SportEventsHour, hour int) (int, error) {
 	targetTime := fmt.Sprintf("%02d:00", hour)
 
 	for _, h := range hours {
@@ -247,7 +245,7 @@ func splitVenueNameNumber(name string) (string, int, int, error) {
 	return name[:numberStart], number, len(numberText), nil
 }
 
-func buildBookingTargets(venues map[string]*models.Venue, venueNames []string, dateStr string, hourID int) ([]bookingTarget, error) {
+func buildBookingTargets(venues map[string]*Venue, venueNames []string, dateStr string, hourID int) ([]bookingTarget, error) {
 	targets := make([]bookingTarget, 0, len(venueNames))
 	seen := make(map[string]bool)
 	for _, venueName := range venueNames {
@@ -264,6 +262,7 @@ func buildBookingTargets(venues map[string]*models.Venue, venueNames []string, d
 		targets = append(targets, bookingTarget{
 			VenueName:    actualName,
 			VenueFieldID: venueFieldID,
+			HourID:       hourID,
 			Scene:        fmt.Sprintf("[{\"day\":\"%s\",\"fields\":{\"%s\":[%d]}}]", dateStr, venueFieldID, hourID),
 		})
 	}
@@ -304,26 +303,60 @@ func waitUntilNextAvailableTime() {
 	}
 }
 
-func notifyOrderDetected(venueID int, target bookingTarget, dateStr string, hour int, order models.OrderItem) {
-	err := sendOrderNotice(venueID, target.VenueName, dateStr, hour, order.ID, order.Amount)
-	if err != nil {
-		fmt.Printf("[%s] 钉钉通知失败: %v\n", target.VenueName, err)
+func matchesBookingTarget(order OrderItem, venueID int, target bookingTarget, dateStr string) bool {
+	if order.SportEventsID != venueID {
+		return false
 	}
-	err = showWindowsOrderNotice(venueID, target.VenueName, dateStr, hour, order.ID, order.Amount)
-	if err != nil {
-		fmt.Printf("[%s] Windows 通知失败: %v\n", target.VenueName, err)
+
+	scenes := order.Config.Scene
+	if len(scenes) == 0 && order.ConfigJSON != "" {
+		var details OrderConfig
+		err := json.Unmarshal([]byte(order.ConfigJSON), &details)
+		if err != nil {
+			return false
+		}
+		scenes = details.Scene
 	}
-	fmt.Printf("[%s] 已检测到订单 %d，正在等待支付...\n", target.VenueName, order.ID)
+	for _, scene := range scenes {
+		if scene.Day != dateStr {
+			continue
+		}
+		for _, hourID := range scene.Fields[target.VenueFieldID] {
+			if hourID == target.HourID {
+				return true
+			}
+		}
+	}
+	return false
 }
 
-func processBookingTarget(venueID int, target bookingTarget, dateStr string, hour int, headers map[string]string) (bool, error) {
-	check, err := api.CheckSportSchedule(venueID, target.Scene, headers)
+func notifyBookingSuccess(settings Settings, venueID int, target bookingTarget, dateStr string, hour int, order OrderItem) {
+	if strings.TrimSpace(settings.DingTalkWebhook) != "" {
+		err := sendOrderNotice(settings, venueID, target.VenueName, dateStr, hour, order.ID, order.Amount)
+		if err != nil {
+			fmt.Printf("[%s] 钉钉通知失败: %v\n", target.VenueName, err)
+		} else {
+			fmt.Printf("[%s] 钉钉通知发送成功\n", target.VenueName)
+		}
+	}
+	if settings.EnableWindowsNotification {
+		err := showWindowsOrderNotice(settings, venueID, target.VenueName, dateStr, hour, order.ID, order.Amount)
+		if err != nil {
+			fmt.Printf("[%s] Windows 通知失败: %v\n", target.VenueName, err)
+		} else {
+			fmt.Printf("[%s] Windows 弹窗已启动\n", target.VenueName)
+		}
+	}
+}
+
+func processBookingTarget(settings Settings, venueID int, target bookingTarget, dateStr string, hour int, headers map[string]string) (bool, error) {
+	check, err := CheckSportSchedule(venueID, target.Scene, headers)
 	if err != nil {
 		if strings.Contains(err.Error(), "预约中") {
 			fmt.Printf("[%s] 检查订单失败: %v，约5秒后继续检查...\n", target.VenueName, err)
 			return false, nil
 		}
-		if api.IsRetryableError(err) {
+		if IsRetryableError(err) {
 			fmt.Printf("[%s] 检查请求暂时失败: %v，约5秒后继续检查...\n", target.VenueName, err)
 			return false, nil
 		}
@@ -332,7 +365,7 @@ func processBookingTarget(venueID int, target bookingTarget, dateStr string, hou
 	}
 
 	fmt.Printf("\n[%s] 检查通过，准备进入下单流程...\n", target.VenueName)
-	_, err = api.SubmitOrder(venueID, check.Data.TotalAmount, target.Scene, headers)
+	_, err = SubmitOrder(venueID, check.Data.TotalAmount, target.Scene, settings.OpenId, headers)
 	if err != nil {
 		fmt.Printf("[%s] 提交订单失败: %v，下轮回到检查阶段...\n", target.VenueName, err)
 		return false, nil
@@ -340,7 +373,7 @@ func processBookingTarget(venueID int, target bookingTarget, dateStr string, hou
 
 	fmt.Printf("[%s] 订单提交成功，开始确认订单...\n", target.VenueName)
 	for {
-		orderList, err := api.GetOrderList("makeappointment", "created", "", 1, 20, headers)
+		orderList, err := GetOrderList("makeappointment", "created", "", 1, 20, headers)
 		if err != nil {
 			fmt.Printf("[%s] 获取订单列表失败: %v，5秒后继续确认...\n", target.VenueName, err)
 			time.Sleep(checkInterval)
@@ -348,119 +381,109 @@ func processBookingTarget(venueID int, target bookingTarget, dateStr string, hou
 		}
 
 		for _, order := range orderList.Data.List {
-			if order.SportEventsID == venueID {
-				notifyOrderDetected(venueID, target, dateStr, hour, order)
+			if matchesBookingTarget(order, venueID, target, dateStr) {
+				fmt.Printf("[%s] 已确认目标订单 %d，抢票成功，请尽快支付。\n", target.VenueName, order.ID)
+				notifyBookingSuccess(settings, venueID, target, dateStr, hour, order)
 				return true, nil
 			}
 		}
 
-		fmt.Printf("[%s] 暂未检测到未支付订单，5秒后继续确认...\n", target.VenueName)
+		fmt.Printf("[%s] 暂未确认目标未支付订单，5秒后继续确认...\n", target.VenueName)
 		time.Sleep(checkInterval)
 	}
 }
 
-func main() {
-	if len(os.Args) > 1 && os.Args[1] == "--testdingtalk" {
-		if err := sendDingTalkTestNotice(); err != nil {
-			fmt.Printf("钉钉通知测试失败: %v\n", err)
-			return
-		}
-		fmt.Println("钉钉通知测试发送成功")
-		return
-	}
-	if len(os.Args) > 1 && os.Args[1] == "--testwin" {
-		if err := showWindowsTestNotice(); err != nil {
-			fmt.Printf("Windows 通知测试失败: %v\n", err)
-			return
-		}
-		fmt.Println("Windows 通知测试显示成功")
-		return
-	}
-
+func runBooking(settings Settings) error {
 	headers := map[string]string{
 		"Content-Type": "application/x-www-form-urlencoded; charset=UTF-8",
+		"token":        settings.ApiToken,
 	}
 
-	venueID := config.DefaultVenueID
+	venueID := settings.DefaultVenueID
 	if venueID > 0 {
 		fmt.Printf("使用配置场馆ID: %d\n", venueID)
 	} else {
-		fmt.Print("请输入场馆ID（25-良乡，51-中关村，54-中关村早晚场）: ")
-		fmt.Scanln(&venueID)
+		var venueInput string
+		err := inputForm("场馆 ID（25-良乡，51-中关村，54-中关村早晚场）", &venueInput, positiveNumber)
+		if err != nil {
+			return err
+		}
+		venueID, _ = strconv.Atoi(venueInput)
 	}
 
-	venues, err := api.GetSportEventsField(venueID, headers)
+	venues, err := GetSportEventsField(venueID, headers)
 	if err != nil {
-		fmt.Printf("获取场馆信息失败: %v\n", err)
-		return
+		return fmt.Errorf("获取场馆信息失败: %w", err)
 	}
 
-	hours, err := api.GetSportEventsHour(venueID, headers)
+	hours, err := GetSportEventsHour(venueID, headers)
 	if err != nil {
-		fmt.Printf("获取时间段信息失败: %v\n", err)
-		return
+		return fmt.Errorf("获取时间段信息失败: %w", err)
 	}
 
-	if config.DefaultYear > 0 {
-		fmt.Printf("请输入预订日期（格式：MMDD，年份使用配置 %d）: ", config.DefaultYear)
-	} else {
-		fmt.Print("请输入预订日期（格式：YYYYMMDD）: ")
+	dateTitle := "预约日期（YYYYMMDD）"
+	if settings.DefaultYear > 0 {
+		dateTitle = fmt.Sprintf("预约日期（MMDD，年份 %d）", settings.DefaultYear)
 	}
 	var dateInput string
-	fmt.Scanln(&dateInput)
-	dateStr, err := normalizeBookingDate(dateInput, config.DefaultYear)
+	err = inputForm(dateTitle, &dateInput, func(value string) error {
+		_, err := normalizeBookingDate(value, settings.DefaultYear)
+		return err
+	})
 	if err != nil {
-		fmt.Printf("日期输入错误: %v\n", err)
-		return
+		return err
 	}
+	dateStr, _ := normalizeBookingDate(dateInput, settings.DefaultYear)
 
-	booked, err := api.GetSportScheduleBooked(venueID, dateStr, headers)
+	booked, err := GetSportScheduleBooked(venueID, dateStr, headers)
 	if err != nil {
-		fmt.Printf("获取场地预订信息失败: %v\n", err)
-		return
+		return fmt.Errorf("获取场地预订信息失败: %w", err)
 	}
 
 	formatAvailableVenues(venues, hours, booked)
 
 	week, err := getWeekday(dateStr)
 	if err != nil {
-		fmt.Printf("计算星期失败: %v\n", err)
-		return
+		return err
 	}
 
-	_, err = api.GetSportEventsPrice(venueID, week, dateStr, headers)
+	_, err = GetSportEventsPrice(venueID, week, dateStr, headers)
 	if err != nil {
-		fmt.Printf("获取价格信息失败: %v\n", err)
-		return
+		return fmt.Errorf("获取价格信息失败: %w", err)
 	}
 
-	fmt.Printf("请输入场地名称或编号（多个用逗号分隔，最多%d个）: ", maxBookingTargets)
 	var venueNamesInput string
-	if _, err = fmt.Scanln(&venueNamesInput); err != nil {
-		fmt.Println("场地名称输入错误: 请使用逗号分隔且不要输入空格，例如 1,2 或 场1，场2")
-		return
-	}
-
-	venueNames, err := parseVenueNames(venueNamesInput)
+	err = inputForm(fmt.Sprintf("场地名称或编号（逗号 / 范围，最多%d个）", maxBookingTargets), &venueNamesInput, func(value string) error {
+		names, err := parseVenueNames(value)
+		if err != nil {
+			return err
+		}
+		_, err = buildBookingTargets(venues, names, dateStr, 0)
+		return err
+	})
 	if err != nil {
-		fmt.Printf("场地名称输入错误: %v\n", err)
-		return
+		return err
 	}
+	venueNames, _ := parseVenueNames(venueNamesInput)
 
-	fmt.Print("请输入预订时间（小时，例如9表示09:00开始的时段）: ")
-	var hour int
-	fmt.Scanln(&hour)
-
-	hourID, err := findHourIDByTime(hours, hour)
+	var hourInput string
+	err = inputForm("预约开始小时", &hourInput, func(value string) error {
+		hour, err := strconv.Atoi(value)
+		if err != nil || hour < 0 || hour > 23 {
+			return fmt.Errorf("请输入 0 到 23 的整数小时")
+		}
+		_, err = findHourIDByTime(hours, hour)
+		return err
+	})
 	if err != nil {
-		fmt.Printf("查找时间段失败: %v\n", err)
-		return
+		return err
 	}
+	hour, _ := strconv.Atoi(hourInput)
+	hourID, _ := findHourIDByTime(hours, hour)
 
 	targets, err := buildBookingTargets(venues, venueNames, dateStr, hourID)
 	if err != nil {
-		fmt.Printf("查找场地失败: %v\n", err)
-		return
+		return fmt.Errorf("查找场地失败: %w", err)
 	}
 
 	targetInterval := checkInterval / time.Duration(len(targets))
@@ -471,13 +494,12 @@ func main() {
 		fmt.Printf("正在检查场馆ID %d 的订单信息...\n", venueID)
 
 		for _, target := range targets {
-			done, err := processBookingTarget(venueID, target, dateStr, hour, headers)
+			done, err := processBookingTarget(settings, venueID, target, dateStr, hour, headers)
 			if err != nil {
-				fmt.Println(err)
-				return
+				return err
 			}
 			if done {
-				return
+				return nil
 			}
 
 			time.Sleep(targetInterval)
