@@ -20,7 +20,7 @@ case "$arch" in
 esac
 
 asset="badminton_linux_${arch}"
-base="https://github.com/GGBondHere/BitBMTGrab/releases/latest/download"
+base="https://github.com/GGBondHere/BITBadminton/releases/latest/download"
 dir="${XDG_CONFIG_HOME:-$HOME/.config}/BitBMTGrab"
 case "$dir" in
     /*) ;;

@@ -1,7 +1,7 @@
-<h1 align="center">北理工羽毛球抢票</h1>
+<h1 align="center">BITBadminton</h1>
 
 <p align="center">
-  <a href="https://github.com/GGBondHere/BitBMTGrab/releases/latest"><img alt="最新 Release 版本" src="https://img.shields.io/github/v/release/GGBondHere/BitBMTGrab?sort=semver&label=version&style=flat-square"></a>
+  <a href="https://github.com/GGBondHere/BITBadminton/releases/latest"><img alt="最新 Release 版本" src="https://img.shields.io/github/v/release/GGBondHere/BITBadminton?sort=semver&label=version&style=flat-square"></a>
   <a href="#下载运行"><img alt="支持 Windows、Linux、macOS" src="https://img.shields.io/badge/platform-Windows%20%7C%20Linux%20%7C%20macOS-0078D4?style=flat-square"></a>
 </p>
 
@@ -42,13 +42,13 @@ https://oapi.dingtalk.com/robot/send?access_token=xxx
 
 ## 下载运行
 
-从 [Releases](https://github.com/GGBondHere/BitBMTGrab/releases) 或下表下载，无需安装 Go。Intel/AMD 电脑选 `amd64`，ARM 电脑选 `arm64`；WSL 使用 Linux 版本。
+从 [Releases](https://github.com/GGBondHere/BITBadminton/releases) 或下表下载，无需安装 Go。Intel/AMD 电脑选 `amd64`，ARM 电脑选 `arm64`；WSL 使用 Linux 版本。
 
 | 系统 | amd64 | arm64 |
 | --- | --- | --- |
-| Windows | [下载](https://github.com/GGBondHere/BitBMTGrab/releases/latest/download/badminton_windows_amd64.exe) | [下载](https://github.com/GGBondHere/BitBMTGrab/releases/latest/download/badminton_windows_arm64.exe) |
-| Linux / WSL | [下载](https://github.com/GGBondHere/BitBMTGrab/releases/latest/download/badminton_linux_amd64) | [下载](https://github.com/GGBondHere/BitBMTGrab/releases/latest/download/badminton_linux_arm64) |
-| macOS | [Intel Mac](https://github.com/GGBondHere/BitBMTGrab/releases/latest/download/badminton_darwin_amd64) | [Apple 芯片 Mac](https://github.com/GGBondHere/BitBMTGrab/releases/latest/download/badminton_darwin_arm64) |
+| Windows | [下载](https://github.com/GGBondHere/BITBadminton/releases/latest/download/badminton_windows_amd64.exe) | [下载](https://github.com/GGBondHere/BITBadminton/releases/latest/download/badminton_windows_arm64.exe) |
+| Linux / WSL | [下载](https://github.com/GGBondHere/BITBadminton/releases/latest/download/badminton_linux_amd64) | [下载](https://github.com/GGBondHere/BITBadminton/releases/latest/download/badminton_linux_arm64) |
+| macOS | [Intel Mac](https://github.com/GGBondHere/BITBadminton/releases/latest/download/badminton_darwin_amd64) | [Apple 芯片 Mac](https://github.com/GGBondHere/BITBadminton/releases/latest/download/badminton_darwin_arm64) |
 
 ### Windows
 
@@ -63,7 +63,7 @@ https://oapi.dingtalk.com/robot/send?access_token=xxx
 一行安装并启动，自动识别架构：
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/GGBondHere/BitBMTGrab/main/install.sh | sh
+curl -fsSL https://raw.githubusercontent.com/GGBondHere/BITBadminton/main/install.sh | sh
 ```
 
 安装后运行 `bmt` 启动。也可从上表下载二进制，赋予执行权限后直接运行。
@@ -122,7 +122,8 @@ chmod +x badminton_darwin_arm64 && ./badminton_darwin_arm64
 
 ## 运行状态
 
-- **预约中**：持续检查；临时网络错误也会重试。上课中、包场中、超过每日预约次数等其他业务错误会退出，建议开始后先观察一轮。
+- **预约中**：持续检查。上课中、包场中、超过每日预约次数等其他业务错误会退出，建议开始后先观察一轮。
+- **网络异常**：各场地独立计数，正常响应后清零；任一场连续失败 5 次，退出当前任务。
 - **检查通过**：立即尝试提交；提交失败则下轮重新检查。
 - **提交成功**：每 5 秒确认本次预约的未支付订单，不重复提交。
 - **已确认目标订单**：抢票成功但尚未支付，发送通知后退出。抢票过程中可用 Ctrl+C 停止。
@@ -206,7 +207,7 @@ go build -o badminton .      # Linux / WSL / macOS
 ## 目录结构
 
 ```text
-BitBMTGrab/
+BITBadminton/
 ├── install.sh                  # Linux / WSL 安装与 bmt 短命令
 ├── main.go                     # 程序入口
 ├── app/

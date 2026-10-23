@@ -10,8 +10,9 @@ import (
 )
 
 const (
-	maxBookingTargets = 5
-	checkInterval     = 5 * time.Second
+	maxBookingTargets  = 5
+	maxNetworkFailures = 5
+	checkInterval      = 5 * time.Second
 )
 
 type bookingTarget struct {
@@ -349,20 +350,26 @@ func notifyBookingSuccess(settings Settings, venueID int, target bookingTarget, 
 	}
 }
 
-func processBookingTarget(settings Settings, venueID int, target bookingTarget, dateStr string, hour int, headers map[string]string) (bool, error) {
+func processBookingTarget(settings Settings, venueID int, target bookingTarget, dateStr string, hour int, headers map[string]string, networkFailures *int) (bool, error) {
 	check, err := CheckSportSchedule(venueID, target.Scene, headers)
 	if err != nil {
-		if strings.Contains(err.Error(), "预约中") {
-			fmt.Printf("[%s] 检查订单失败: %v，约5秒后继续检查...\n", target.VenueName, err)
+		if IsRetryableError(err) {
+			*networkFailures += 1
+			if *networkFailures >= maxNetworkFailures {
+				return false, fmt.Errorf("[%s] 检查请求连续失败 %d 次，停止抢票: %w", target.VenueName, *networkFailures, err)
+			}
+			fmt.Printf("[%s] 检查请求暂时失败（连续 %d/%d 次）: %v，下轮继续检查...\n", target.VenueName, *networkFailures, maxNetworkFailures, err)
 			return false, nil
 		}
-		if IsRetryableError(err) {
-			fmt.Printf("[%s] 检查请求暂时失败: %v，约5秒后继续检查...\n", target.VenueName, err)
+		*networkFailures = 0
+		if strings.Contains(err.Error(), "预约中") {
+			fmt.Printf("[%s] 检查订单失败: %v，下轮继续检查...\n", target.VenueName, err)
 			return false, nil
 		}
 
 		return false, fmt.Errorf("[%s] 检查订单失败: %v", target.VenueName, err)
 	}
+	*networkFailures = 0
 
 	fmt.Printf("\n[%s] 检查通过，准备进入下单流程...\n", target.VenueName)
 	_, err = SubmitOrder(venueID, check.Data.TotalAmount, target.Scene, settings.OpenId, headers)
@@ -487,14 +494,15 @@ func runBooking(settings Settings) error {
 	}
 
 	targetInterval := checkInterval / time.Duration(len(targets))
+	networkFailures := make([]int, len(targets))
 
 	for {
 		waitUntilNextAvailableTime()
 
 		fmt.Printf("正在检查场馆ID %d 的订单信息...\n", venueID)
 
-		for _, target := range targets {
-			done, err := processBookingTarget(settings, venueID, target, dateStr, hour, headers)
+		for i, target := range targets {
+			done, err := processBookingTarget(settings, venueID, target, dateStr, hour, headers, &networkFailures[i])
 			if err != nil {
 				return err
 			}

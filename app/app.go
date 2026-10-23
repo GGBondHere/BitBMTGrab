@@ -28,7 +28,7 @@ func run(version string) error {
 		return fmt.Errorf("不支持位置参数，请使用 --help 查看可用参数")
 	}
 	if *showVersion {
-		fmt.Printf("BitBMTGrab %s\n", version)
+		fmt.Printf("BITBadminton %s\n", version)
 		return nil
 	}
 	if *testDingTalk && *testWindows {

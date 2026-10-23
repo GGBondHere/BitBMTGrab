@@ -109,7 +109,7 @@ func initializeSettings(path string, settings *Settings) error {
 }
 
 func runMenu(version, path string, settings *Settings, initialize bool) error {
-	fmt.Printf("BitBMTGrab %s\n配置位置: %s\n", version, path)
+	fmt.Printf("BITBadminton %s\n配置位置: %s\n", version, path)
 	if initialize {
 		err := initializeSettings(path, settings)
 		if err != nil {
